@@ -29,25 +29,24 @@ else:
     CaseInsensitiveDictType = CaseInsensitiveDict
 Proxies = Dict[str, str]
 
-
 # Constants
 CLIENT_ID: str = "c82SH0WZOsabOXGP2sxqcj34FxkvfnWRZBKlBjFS"
 """Robinhood client id."""
 HEADERS: CaseInsensitiveDictType = CaseInsensitiveDict(
     {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
-        "Accept-Language": "en;q=1, fr;q=0.9, de;q=0.8, ja;q=0.7, nl;q=0.6, it;q=0.5",
+        "Accept-Encoding": "gzip,deflate,br",
+        "Accept-Language": "en-US,en;q=1",
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-        "X-Robinhood-API-Version": "1.0.0",
+        "X-Robinhood-API-Version": "1.431.4",
         "Connection": "keep-alive",
-        "User-Agent": "Robinhood/823 (iPhone; iOS 7.1.2; Scale/2.00)",
+        "User-Agent": "*",
     }
 )
 """Headers used when performing requests with robinhood api."""
 # 8.5 days (you have a small window to refresh after this)
 # I would refresh the token proactively every day in a script
-EXPIRATION_TIME: int = 734000
+EXPIRATION_TIME: int = 689285
 """Default expiration time for requests."""
 
 TIMEOUT: int = 3
@@ -417,41 +416,66 @@ class SessionManager(BaseModel):
 
         """
         self.session.headers.pop("Authorization", None)
+        # todo:
+        #   1. Fix oauth schema
+        #   2. Update/remove challenge type
+        #   3. Store tokens locally and re-use
+        #   4. Update tests
 
         oauth_payload = {
-            "password": self.password,
-            "username": self.username,
-            "grant_type": "password",
             "client_id": CLIENT_ID,
             "expires_in": EXPIRATION_TIME,
+            "grant_type": "password",
+            "password": self.password,
             "scope": "internal",
+            "username": self.username,
             "device_token": self.device_token,
-            "challenge_type": self.challenge_type,
+            "try_passkeys": False,
+            "token_request_path": "/login",
+            "create_read_only_secondary_token": True,
         }
+        if self.mfa:
+            oauth_payload["mfa_code"] = self.mfa
 
-        oauth = self.post(
+        data = self.post(
             urls.OAUTH,
             data=oauth_payload,
             raise_errors=False,
             auto_login=False,
-            schema=OAuthSchema(),
+            # schema=OAuthSchema(),
         )
+        print(data)
+        from pyrh.models.sherrif import Sherrif
 
-        if oauth.is_challenge:
-            oauth = self._challenge_oauth2(oauth, oauth_payload)
-        elif oauth.is_mfa:
-            oauth = self._mfa_oauth2(oauth_payload)
+        if data.get("verification_workflow"):
+            workflow_id = data["verification_workflow"]["id"]
+            sherif = Sherrif(session=self.session)
+            sherif.validate_sherrif_id(self.device_token, workflow_id)
+            # Reattempt login after verification
+            data = sherif.request_post(url=str(urls.OAUTH), payload=oauth_payload)
 
-        if not oauth.is_valid:
-            if hasattr(oauth, "error"):
-                msg = f"{oauth.error}"
-            elif hasattr(oauth, "detail"):
-                msg = f"{oauth.detail}"
-            else:
-                msg = "Unknown login error"
-            raise AuthenticationError(msg)
-        else:
-            self._configure_manager(oauth)
+        if data.get("access_token"):
+            token = "{0} {1}".format(data["token_type"], data["access_token"])
+            self.session.headers["Authorization"] = token
+        #     self.session.headers.update(
+        #         {"Authorization": f"Bearer {self.oauth.access_token}"}
+        #     )
+        #
+        # if oauth.is_challenge:
+        #     oauth = self._challenge_oauth2(oauth, oauth_payload)
+        # elif oauth.is_mfa:
+        #     oauth = self._mfa_oauth2(oauth_payload)
+        #
+        # if not oauth.is_valid:
+        #     if hasattr(oauth, "error"):
+        #         msg = f"{oauth.error}"
+        #     elif hasattr(oauth, "detail"):
+        #         msg = f"{oauth.detail}"
+        #     else:
+        #         msg = "Unknown login error"
+        #     raise AuthenticationError(msg)
+        # else:
+        #     self._configure_manager(oauth)
 
     def _refresh_oauth2(self) -> None:
         """Refresh an oauth2 token.
