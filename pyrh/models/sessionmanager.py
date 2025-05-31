@@ -1,5 +1,5 @@
 """Manage Robinhood Sessions."""
-
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union, cast
@@ -18,7 +18,9 @@ from pyrh import urls
 from pyrh.exceptions import AuthenticationError, PyrhValueError
 
 from .base import JSON, BaseModel, BaseSchema
+from .login import LOGIN_FILE, load_existing_oauth, save_existing_oauth
 from .oauth import CHALLENGE_TYPE_VAL, OAuth, OAuthSchema
+from .workflow import verify_workflow
 
 # TODO: merge get and post duplicated code into a single function.
 
@@ -157,10 +159,19 @@ class SessionManager(BaseModel):
                 refresh.
 
         """
+        if force_refresh:
+            if os.path.isfile(LOGIN_FILE):
+                os.remove(LOGIN_FILE)
+        else:
+            oauth = load_existing_oauth()
+            if oauth:
+                self._configure_manager(oauth)
+                return
         if "Authorization" not in self.session.headers:
             self._login_oauth2()
         elif self.oauth.is_valid and (self.token_expired or force_refresh):
             self._refresh_oauth2()
+        save_existing_oauth(self.oauth)
 
     def get(
         self,
@@ -416,11 +427,6 @@ class SessionManager(BaseModel):
 
         """
         self.session.headers.pop("Authorization", None)
-        # todo:
-        #   1. Fix oauth schema
-        #   2. Update/remove challenge type
-        #   3. Store tokens locally and re-use
-        #   4. Update tests
 
         oauth_payload = {
             "client_id": CLIENT_ID,
@@ -442,40 +448,38 @@ class SessionManager(BaseModel):
             data=oauth_payload,
             raise_errors=False,
             auto_login=False,
-            # schema=OAuthSchema(),
         )
-        print(data)
-        from pyrh.models.sherrif import Sherrif
 
         if data.get("verification_workflow"):
             workflow_id = data["verification_workflow"]["id"]
-            sherif = Sherrif(session=self.session)
-            sherif.validate_sherrif_id(self.device_token, workflow_id)
+            verify_workflow(
+                session=self.session,
+                device_token=self.device_token,
+                workflow_id=workflow_id,
+            )
             # Reattempt login after verification
-            data = sherif.request_post(url=str(urls.OAUTH), payload=oauth_payload)
-
-        if data.get("access_token"):
-            token = "{0} {1}".format(data["token_type"], data["access_token"])
-            self.session.headers["Authorization"] = token
-        #     self.session.headers.update(
-        #         {"Authorization": f"Bearer {self.oauth.access_token}"}
-        #     )
-        #
-        # if oauth.is_challenge:
-        #     oauth = self._challenge_oauth2(oauth, oauth_payload)
-        # elif oauth.is_mfa:
-        #     oauth = self._mfa_oauth2(oauth_payload)
-        #
-        # if not oauth.is_valid:
-        #     if hasattr(oauth, "error"):
-        #         msg = f"{oauth.error}"
-        #     elif hasattr(oauth, "detail"):
-        #         msg = f"{oauth.detail}"
-        #     else:
-        #         msg = "Unknown login error"
-        #     raise AuthenticationError(msg)
-        # else:
-        #     self._configure_manager(oauth)
+            oauth = self.post(
+                url=str(urls.OAUTH),
+                data=oauth_payload,
+                raise_errors=False,
+                schema=OAuthSchema(),
+            )
+            if oauth.is_challenge:
+                oauth = self._challenge_oauth2(oauth, oauth_payload)
+            elif oauth.is_mfa:
+                oauth = self._mfa_oauth2(oauth_payload)
+            if not oauth.is_valid:
+                if hasattr(oauth, "error"):
+                    msg = f"{oauth.error}"
+                elif hasattr(oauth, "detail"):
+                    msg = f"{oauth.detail}"
+                else:
+                    msg = "Unknown login error"
+                raise AuthenticationError(msg)
+            else:
+                self._configure_manager(oauth)
+        else:
+            raise AuthenticationError("Failed to login, no verification workflow found")
 
     def _refresh_oauth2(self) -> None:
         """Refresh an oauth2 token.
