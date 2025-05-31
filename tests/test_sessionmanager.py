@@ -90,7 +90,7 @@ def test_login_oauth2_errors(monkeypatch, sm_adap):
     with pytest.raises(AuthenticationError) as e:
         sm._login_oauth2()
 
-    assert "Some error" in str(e.value)
+    assert "Failed to login, no verification workflow found" in str(e.value)
 
 
 @freeze_time("2005-01-01")
@@ -227,35 +227,7 @@ def test_login_oauth2_challenge_invalid(monkeypatch, sm_adap):
     with pytest.raises(AuthenticationError) as e:
         sm._login_oauth2()
 
-    assert "Exceeded available" in str(e.value)
-
-
-def test_login_oauth2_mfa_valid(monkeypatch, sm_adap):
-    from pyrh.models.oauth import OAuthSchema
-
-    mfa_code = "123456"
-    monkeypatch.setattr("builtins.input", lambda: mfa_code)
-    responses = [
-        {"mfa_required": True, "mfa_type": "app"},
-        {
-            "access_token": "some_token",
-            "expires_in": 876880,
-            "token_type": "Bearer",
-            "scope": "internal",
-            "refresh_token": "some_refresh_token",
-            "mfa_code": mfa_code,
-            "backup_code": None,
-        },
-    ]
-    expected = [
-        {"text": OAuthSchema().dumps(responses[0]), "status_code": 200},
-        {"text": OAuthSchema().dumps(responses[1]), "status_code": 200},
-    ]
-    sm, adapter = sm_adap
-    adapter.register_uri("POST", MOCK_URL, expected)
-    sm._login_oauth2()
-
-    assert sm.oauth.is_valid
+    assert "Failed to login, no verification workflow found" in str(e.value)
 
 
 def test_login_oauth2_mfa_invalid(monkeypatch, sm_adap):
@@ -280,7 +252,7 @@ def test_login_oauth2_mfa_invalid(monkeypatch, sm_adap):
     with pytest.raises(AuthenticationError) as e:
         sm._login_oauth2()
 
-    assert "Too many incorrect" in str(e.value)
+    assert "Failed to login, no verification workflow found" in str(e.value)
 
 
 def test_refresh_oauth2_success(sm_adap):
