@@ -1,7 +1,6 @@
 """This module contains the caching logic for Robinhood login data."""
 
 import json
-import os
 import pathlib
 import time
 from datetime import datetime
@@ -28,24 +27,24 @@ LOGIN_FILE.touch(exist_ok=True)
 
 def load_existing_oauth() -> Union[OAuth, None]:
     """Get the path to the login file."""
-    if os.path.isfile(LOGIN_FILE):
+    try:
         with open(LOGIN_FILE) as file:
             json_data = json.load(file)
-        try:
-            assert isinstance(json_data, dict), "Cached data must be a dictionary."
-            assert json_data.get("login"), "Cached data must contain 'login' key."
-            assert json_data.get("expiry"), "Cached data must contain 'expiry' key."
-            assert isinstance(json_data["expiry"], int), "'expiry' must be an integer."
-            if json_data["expiry"] < int(time.time()):
-                print("Cached login data has expired.")
-                return None
-            assert isinstance(json_data["login"], dict), "'login' must be a dictionary."
-        except (AssertionError, json.JSONDecodeError) as error:
-            print(f"Invalid cached data: {error}")
-            raise InvalidCacheFile("Cached login file is invalid or corrupted.")
-        else:
-            return OAuthSchema().load(json_data["login"])
-    return None
+        assert isinstance(json_data, dict), "Cached data must be a dictionary."
+        assert json_data.get("login"), "Cached data must contain 'login' key."
+        assert json_data.get("expiry"), "Cached data must contain 'expiry' key."
+        assert isinstance(json_data["expiry"], int), "'expiry' must be an integer."
+        if json_data["expiry"] < int(time.time()):
+            print("Cached login data has expired.")
+            return None
+        assert isinstance(json_data["login"], dict), "'login' must be a dictionary."
+    except AssertionError as error:
+        print(f"Invalid cached data: {error}")
+        raise InvalidCacheFile("Cached login file is invalid or corrupted.")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    else:
+        return OAuthSchema().load(json_data["login"])
 
 
 def save_existing_oauth(data: OAuth) -> None:

@@ -166,7 +166,12 @@ class SessionManager(BaseModel):
             oauth = load_existing_oauth()
             if oauth:
                 self._configure_manager(oauth)
-                return
+                # Once oauth is configured, attempt to retrieve positions to check if auth token is still valid
+                _, resp = self.get(urls.POSITIONS, return_response=True)
+                if resp.ok:
+                    return
+                else:
+                    self.session.headers = {}
         if "Authorization" not in self.session.headers:
             self._login_oauth2()
         elif self.oauth.is_valid and (self.token_expired or force_refresh):
@@ -494,9 +499,7 @@ class SessionManager(BaseModel):
         relogin_payload = {
             "grant_type": "refresh_token",
             "refresh_token": self.oauth.refresh_token,
-            "scope": "internal",
             "client_id": CLIENT_ID,
-            "expires_in": EXPIRATION_TIME,
         }
         self.session.headers.pop("Authorization", None)
         try:
