@@ -163,7 +163,7 @@ class SessionManager(BaseModel):
             if os.path.isfile(LOGIN_FILE):
                 os.remove(LOGIN_FILE)
         else:
-            oauth = load_existing_oauth()
+            oauth = load_existing_oauth(username=self.username, password=self.password)
             if oauth:
                 self._configure_manager(oauth)
                 # Once oauth is configured, attempt to retrieve positions to check if auth token is still valid
