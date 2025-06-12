@@ -176,7 +176,9 @@ class SessionManager(BaseModel):
             self._login_oauth2()
         elif self.oauth.is_valid and (self.token_expired or force_refresh):
             self._refresh_oauth2()
-        save_existing_oauth(self.oauth)
+        save_existing_oauth(
+            data=self.oauth, username=self.username, password=self.password
+        )
 
     def get(
         self,
