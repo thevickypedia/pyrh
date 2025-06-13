@@ -6,7 +6,7 @@ on:
     branches: [ master ]
 
 jobs:
-  line-test-and-build:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -14,6 +14,22 @@ jobs:
         with:
           python-version: '3.10'
       - uses: pre-commit/action@v3.0.0
+  test:
+    needs: lint
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        python-version: [ 3.8, 3.9, '3.10']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Install Poetry
         uses: snok/install-poetry@v1.3.3
         with:
@@ -25,7 +41,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .venv
-          key: venv-ubuntu-latest-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
@@ -36,8 +52,8 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1.0.7
         env:
-          OS: ubuntu-latest
-          PYTHON: '3.10'
+          OS: ${{ matrix.os }}
+          PYTHON: ${{ matrix.python-version }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
