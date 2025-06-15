@@ -26,9 +26,7 @@ CACHE_LOGIN.touch(exist_ok=True)
 # https://github.com/terrencepreilly/darglint/issues/81
 
 
-def dump_session(
-    robinhood: Robinhood = None, path: Optional[Union[Path, str]] = None
-) -> None:
+def dump_session(robinhood: Robinhood, path: Optional[Union[Path, str]] = None) -> None:
     """Save the current session parameters to a json file.
 
     Note:
