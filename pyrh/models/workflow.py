@@ -1,4 +1,4 @@
-"""Sheriff is a class that handles Robinhood's verification workflow, including email, SMS, and app-based approvals."""
+"""Handles Robinhood's verification workflow, including email, SMS, and app-based approvals."""
 
 import time
 
@@ -108,11 +108,13 @@ def verify_workflow(
 
     start_time = time.time()
 
-    while time.time() - start_time < 120:  # 2-minute timeout
+    # 2-minute timeout
+    while time.time() - start_time < 120:
         time.sleep(5)
         inquiries_response = request_get(url=inquiries_url, session=session)
 
-        if not inquiries_response:  # Handle case where response is None
+        # Handle case where response is None
+        if not inquiries_response:
             print("Error: No response from Robinhood API. Retrying...")
             continue
 
@@ -138,8 +140,9 @@ def verify_workflow(
                         break
                 break
 
+            # Stop polling once verification is complete
             if challenge_status == "validated":
-                break  # Stop polling once verification is complete
+                break
 
             if challenge_type in ["sms", "email"] and challenge_status == "issued":
                 user_code = input(
@@ -173,8 +176,11 @@ def poll_workflow_status(
         f"https://api.robinhood.com/pathfinder/inquiries/{machine_id}/user_view/"
     )
 
-    retry_attempts = 5  # Allow up to 5 retries in case of 500 errors
-    while time.time() - start_time < 120:  # 2-minute timeout
+    # Allow up to 5 retries in case of 500 error codes
+    retry_attempts = 5
+
+    # 2-minute timeout
+    while time.time() - start_time < 120:
         try:
             inquiries_payload = {
                 "sequence": 0,
@@ -190,9 +196,8 @@ def poll_workflow_status(
             ):
                 return
             else:
-                time.sleep(
-                    5
-                )  # **Increase delay between requests to prevent rate limits**
+                # **Increase delay between requests to prevent rate limits**
+                time.sleep(5)
         except requests.exceptions.RequestException as e:
             time.sleep(5)
             print(f"API request failed: {e}")
@@ -204,7 +209,7 @@ def poll_workflow_status(
             print("Retrying workflow status check...")
             continue
 
-        if not inquiries_response:  # Handle None response
+        if not inquiries_response:
             time.sleep(5)
             print("Error: No response from Robinhood API. Retrying...")
             retry_attempts -= 1
