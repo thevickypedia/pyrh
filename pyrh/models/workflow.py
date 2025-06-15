@@ -33,7 +33,7 @@ def request_post(
             ] = "application/x-www-form-urlencoded; charset=utf-8"
         else:
             res = session.post(url, data=payload, timeout=timeout)
-        if res.status_code not in [
+        assert res.status_code in (
             200,
             201,
             202,
@@ -47,10 +47,13 @@ def request_post(
             401,
             402,
             403,
-        ]:
-            raise Exception("Received " + str(res.status_code))
+        ), "Received " + str(res.status_code)
         return res.json()
-    except Exception as message:
+    except (
+        AssertionError,
+        requests.RequestException,
+        requests.JSONDecodeError,
+    ) as message:
         print("Error in request_post: {0}".format(message))
     return None
 

@@ -76,7 +76,6 @@ def load_existing_oauth(username: str, password: str) -> Union[OAuth, None]:
     try:
         with LOGIN_FILE.open("rb") as file:
             encrypted = pickle.load(file)
-            file.flush()
         json_data = ast.literal_eval(
             decrypt_token(encrypted, str(username + password)[0:32])
         )
