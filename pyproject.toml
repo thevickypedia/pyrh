@@ -38,7 +38,7 @@ python-dateutil = "^2.8"
 pytz = "^2022.7.1"
 requests = "^2.23"
 yarl = "^1.4.2"
-certifi = "^2022.12.7"
+certifi = ">=2022.12.7,<2027.0.0"
 cryptography = "^43.0.3"
 pyotp = "^2.8.0"
 
